@@ -1,4 +1,3 @@
-#FROM nvidia/cuda:11.8.0-devel-ubuntu20.04
 FROM mosaicml/pytorch:2.0.1_cu118-python3.10-ubuntu20.04
 
 ENV LANG C.UTF-8
@@ -30,10 +29,9 @@ RUN apt-get install -y --no-install-recommends \
 
 RUN apt-get update -y
 RUN apt-get install -y --fix-missing --allow-downgrades --allow-change-held-packages --no-install-recommends sudo screen vim emacs
+RUN pip3 install bitsandbytes accelerate
+RUN pip3 install git+https://github.com/huggingface/transformers.git
 
-RUN pip3 install transformers mlx-lm
-
-# 作業領域の作成 (ホストOS の /data をマウントするため)
 WORKDIR /data
 WORKDIR /opt/src
 COPY src /opt/src/

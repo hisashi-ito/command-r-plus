@@ -1,30 +1,22 @@
-from mlx_lm import load, generate
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
-model, tokenizer = load("mlx-community/c4ai-command-r-plus-4bit")
+model_id = "CohereForAI/c4ai-command-r-plus-4bit"
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+model = AutoModelForCausalLM.from_pretrained(model_id)
 
-# Format message with the command-r tool use template
-conversation = [
-    {"role": "user", "content": "Whats the biggest penguin in the world?"}
-]
-# Define tools available for the model to use:
-tools = [
-  {
-    "name": "internet_search",
-    "description": "Returns a list of relevant document snippets for a textual query retrieved from the internet",
-    "parameter_definitions": {
-      "query": {
-        "description": "Query to search the internet with",
-        "type": 'str',
-        "required": True
-      }
-    }
-  },
-  {
-    'name': "directly_answer",
-    "description": "Calls a standard (un-augmented) AI chatbot to generate a response given the conversation history",
-    'parameter_definitions': {}
-  }
-]
+# Format message with the command-r-plus chat template
+# messages = [{"role": "user", "content": "Hello, how are you?"}]
+messages = [{"role": "user", "content": "土用の丑の日の提唱者を教えてください"}] 
+input_ids = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt")
+## <BOS_TOKEN><|START_OF_TURN_TOKEN|><|USER_TOKEN|>土用の丑の日の提唱者を教えてください<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>
 
-formatted_input = tokenizer.apply_tool_use_template(conversation, tools=tools, tokenize=False, add_generation_prompt=True)
-response = generate(model, tokenizer, prompt=formatted_input, verbose=True)
+gen_tokens = model.generate(
+    input_ids, 
+    max_new_tokens=1024, 
+    do_sample=True, 
+    temperature=0.7,
+)
+
+gen_text = tokenizer.decode(gen_tokens[0])
+# <BOS_TOKEN><|START_OF_TURN_TOKEN|><|USER_TOKEN|>土用の丑の日の提唱者を教えてください<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>平賀源内<|END_OF_TURN_TOKEN|>
+print(gen_text)
