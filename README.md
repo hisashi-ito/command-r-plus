@@ -13,6 +13,10 @@ Cohere Command R+ をlcoal (非MLX環境)　環境で動かすための手順と
 * ディスクの空き容量
   * models--CohereForAI--c4ai-command-r-plus-4bit が59GBあるので空き容量に注意。
 
+### 利用モデル
+[CohereForAI/c4ai-command-r-plus-4bit](https://huggingface.co/CohereForAI/c4ai-command-r-plus-4bit)  
+4bitモデルでないと本環境ではGPUメモリが足りなくて動作しない。
+
 ### 環境構築方法
 ```bash
 $ git clone https://github.com/hisashi-ito/command-r-plus.git
