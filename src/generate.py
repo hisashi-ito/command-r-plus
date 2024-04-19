@@ -4,7 +4,7 @@ model_id = "CohereForAI/c4ai-command-r-plus-4bit"
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 
 """ model info
-ohereForCausalLM(
+CohereForCausalLM(
   (model): CohereModel(
     (embed_tokens): Embedding(256000, 12288, padding_idx=0)
     (layers): ModuleList(
