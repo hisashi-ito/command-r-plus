@@ -277,7 +277,6 @@ class Inference(object):
                 ]
                 ret["choices"] = choices
 
-            print("hoge")
             yield json.dumps(ret, ensure_ascii=False)
             
 
