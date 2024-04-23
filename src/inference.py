@@ -45,8 +45,12 @@ def get_params(dic, key, default):
             return default
         else:
             return dic[key]
-    
-        
+
+
+class InputMaxTokenException(Exception):
+    pass    
+
+
 class Inference(object):
     def __init__(self, params):
         # params は初期パラメータ(dict)
@@ -229,8 +233,12 @@ class Inference(object):
         generate_kwargs['diversity_penalty'] = self.params["diversity_penalty"]
 
         thread = threading.Thread(target=self.model.generate, kwargs=generate_kwargs)
+        print("start")
         thread.start()
+        thread.join()
+        print("end")
         
+        """
         start_length = len(prompt)
         buff = ""
         flg = True
@@ -277,8 +285,9 @@ class Inference(object):
                 ]
                 ret["choices"] = choices
 
+            print("hoge")
             yield json.dumps(ret, ensure_ascii=False)
-            
+        """
 
 if __name__ == '__main__':
     params = {
@@ -307,6 +316,7 @@ if __name__ == '__main__':
     
     hf = Inference(params)
 
+    """
     print("*** messages ***")
     messages = [{"role": "user", "content": "京都アニメーションの映画でお勧めを３つ教えてください"}] 
     print(hf({}, messages=messages))
@@ -314,7 +324,8 @@ if __name__ == '__main__':
     print("*** prompt ***")
     prompt = "<BOS_TOKEN><|START_OF_TURN_TOKEN|><|USER_TOKEN|>京都アニメーションの映画でお勧めを３つ教えてください<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
     print(hf({}, prompt=prompt))
-
+    """
+    
     # stream が動作しないなぜ？
     messages = [{"role": "user", "content": "京都アニメーションの映画でお勧めを３つ教えてください"}]                 
     chunk_gen = hf.stream(params, messages=messages)
