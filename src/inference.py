@@ -36,6 +36,19 @@ from transformers import (
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s -- : %(message)s')
 logger = logging.getLogger(__name__)
 
+def cln_params(dic):
+    ret = {}
+    for k, v in dic.items():
+        if isinstance(v, str):
+            if v.lower() == 'none':
+                v = None
+            elif v.lower() == "true":
+                v = True
+            elif v.lower() == "false":
+                v = False
+        ret[k] = v
+
+    return ret
 
 def get_params(dic, key, default):
     if key not in dic:
@@ -45,7 +58,6 @@ def get_params(dic, key, default):
             return default
         else:
             return dic[key]
-
 
 class InputMaxTokenException(Exception):
     pass    
@@ -75,13 +87,11 @@ class Inference(object):
         
         for msg in messages:
             last_role = role = msg["role"]
-            content = msg["content"]
-            
+            content = msg["content"]           
             if role == "user" or role == "system":
                 prompt += f"<BOS_TOKEN><|START_OF_TURN_TOKEN|><|USER_TOKEN|>{content}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
             else:
                 prompt += f"{content}<|END_OF_TURN_TOKEN|>"
-
         return prompt, last_role
     
     def __call__(self, params, messages=None, prompt=None):
@@ -91,18 +101,17 @@ class Inference(object):
             'min_new_tokens': get_params(params, "min_new_tokens", self.params["min_new_tokens"]),
             'temperature': temp,
             'top_p': get_params(params, "top_p", self.params["top_p"]),
-            'num_return_sequences': get_params(params, "num_return_sequences", self.params["num_return_sequences"]),
             'top_k': get_params(params, "top_k", self.params["top_k"]),
             'repetition_penalty': get_params(params, "repetition_penalty", self.params["repetition_penalty"]),
             'no_repeat_ngram_size': get_params(params, "no_repeat_ngram_size", self.params["no_repeat_ngram_size"]),
             'num_beams': get_params(params, "num_beams", self.params["num_beams"]),
             'num_beam_groups': get_params(params, "num_beam_groups", self.params["num_beam_groups"]),
+            'num_return_sequences': get_params(params, "num_return_sequences", self.params["num_return_sequences"]),
             'use_cache': self.params["use_cache"],
             'do_sample': False if temp == 0 else self.params["do_sample"],
             'eos_token_id': self.tokenizer.eos_token_id,
             'pad_token_id': self.tokenizer.pad_token_id
         }
-        generate_kwargs['diversity_penalty'] = self.params["diversity_penalty"]
         
         # Generate function with correct context managers
         def _generate(encoded_inp_: Dict[str, torch.Tensor]):
@@ -113,7 +122,6 @@ class Inference(object):
                         attention_mask=encoded_inp_['attention_mask'],
                         **generate_kwargs,
                     )
-
 
         # messages 配列から`prompt`を作成する
         if prompt == None:
@@ -126,7 +134,7 @@ class Inference(object):
         # Split into prompt batches
         # バッチサイズは実質的には常に1 となる
         batch = [prompt]
-
+        
         encoded_inp = self.tokenizer(batch, return_tensors='pt', padding=True)
         encoded_inp.to("cuda")
         if len(encoded_inp[0]) >= self.params["input_max_tokens"]:
@@ -147,6 +155,8 @@ class Inference(object):
         gen_tokens = torch.sum(encoded_gen != self.tokenizer.pad_token_id, axis=1).numpy(force=True)  # type: ignore
         effective_prompts = self.tokenizer.batch_decode(encoded_inp['input_ids'], skip_special_tokens=True)
 
+        logger.info(gen_tokens)
+        
         # 生成結果を複数生成
         choices = []
         for i, (dgen, egen) in enumerate(zip(decoded_gen, encoded_gen)):
@@ -178,7 +188,7 @@ class Inference(object):
                     }
                 }
             )
-
+            
         # numpy.int64 はjson.dumpsで失敗するのでintに変換しておく
         ret = {
             "choices": choices,
@@ -193,103 +203,15 @@ class Inference(object):
 
         return ret
 
-    def stream(self, params, messages=None, prompt=None):
-        # messages 配列から`prompt`を作成する
-        if prompt == None:
-            prompt, last_role = self.gen_prompt(messages)
-        else:
-            last_role = 'assistant'
-            
-        # Split into prompt batches
-        # バッチサイズは実質的には常に1 となる
-        batch = [prompt]
-        
-        encoded_inp = self.tokenizer(batch, return_tensors='pt', return_token_type_ids=False, padding=True)
-        encoded_inp.to("cuda")
-        if len(encoded_inp[0]) >= self.params["input_max_tokens"]:
-            input_max_tokens = int(self.params["input_max_tokens"])
-            raise InputMaxTokenException(
-                f"入力トークンが最大値を超えました: {int(len(encoded_inp[0]))}, 最大値: {input_max_tokens}")        
-
-        streamer = TextIteratorStreamer(self.tokenizer)
-
-        temp = get_params(params, "temperature", self.params["temperature"])
-        generate_kwargs = {
-            'max_new_tokens': get_params(params, "max_new_tokens", self.params["max_new_tokens"]),
-            'min_new_tokens': get_params(params, "min_new_tokens", self.params["min_new_tokens"]),
-            'temperature': temp,
-            'top_p': get_params(params, "top_p", self.params["top_p"]),
-            'num_return_sequences': get_params(params, "num_return_sequences", self.params["num_return_sequences"]),
-            'top_k': get_params(params, "top_k", self.params["top_k"]),
-            'repetition_penalty': get_params(params, "repetition_penalty", self.params["repetition_penalty"]),
-            'no_repeat_ngram_size': get_params(params, "no_repeat_ngram_size", self.params["no_repeat_ngram_size"]),
-            'num_beams': get_params(params, "num_beams", self.params["num_beams"]),
-            'num_beam_groups': get_params(params, "num_beam_groups", self.params["num_beam_groups"]),
-            'use_cache': self.params["use_cache"],
-            'do_sample': False if temp == 0 else self.params["do_sample"],
-            'eos_token_id': self.tokenizer.eos_token_id,
-            'pad_token_id': self.tokenizer.pad_token_id
-        }
-        generate_kwargs['diversity_penalty'] = self.params["diversity_penalty"]
-
-        thread = threading.Thread(target=self.model.generate, kwargs=generate_kwargs)
-        print("start")
-        thread.start()
-        thread.join()
-        print("end")
-        
-        """
-        start_length = len(prompt)
-        buff = ""
-        flg = True
-        
-        for chunk in streamer:
-            if not chunk: continue
-            buff += chunk
-            
-            # 文字列を生成している初回しか処理されない
-            if (len(buff) >= start_length) and flg:
-                output = buff[start_length:]
-                flg = False
-            elif len(buff) >= start_length:
-                output = chunk
-            else:
-                continue
-
-            ret = {
-                "object": "chat.completion.chunk",
-                "created": int(time.time()),
-            }
-
-            if self.tokenizer.eos_token not in output:
-                choices = [
-                    {
-                        "index": 0,
-                        "delta": {
-                            "content": output
-                        },
-                        "finish_reason": None
-                    }
-                ]
-                ret["choices"] = choices
-                
-            else:
-                choices = [
-                    {
-                        "index": 0,
-                        "delta": {
-                            "content": output.replace('', '')
-                        },
-                        "finish_reason": "stop"
-                    }
-                ]
-                ret["choices"] = choices
-
-            print("hoge")
-            yield json.dumps(ret, ensure_ascii=False)
-        """
 
 if __name__ == '__main__':
+    import yaml
+    with open("cohere_inference.yaml", mode="r", encoding="utf-8") as f:
+        params = yaml.load(f, Loader=yaml.SafeLoader)["inference"]
+
+    params = cln_params(params)
+    
+    """        
     params = {
         "input_max_tokens": 4096,
         "max_new_tokens": 512,
@@ -313,10 +235,9 @@ if __name__ == '__main__':
         "num_return_sequences": 1,
         "bad_words": []
     }
-    
+    """
     hf = Inference(params)
 
-    """
     print("*** messages ***")
     messages = [{"role": "user", "content": "京都アニメーションの映画でお勧めを３つ教えてください"}] 
     print(hf({}, messages=messages))
@@ -324,10 +245,10 @@ if __name__ == '__main__':
     print("*** prompt ***")
     prompt = "<BOS_TOKEN><|START_OF_TURN_TOKEN|><|USER_TOKEN|>京都アニメーションの映画でお勧めを３つ教えてください<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
     print(hf({}, prompt=prompt))
-    """
     
     # stream が動作しないなぜ？
-    messages = [{"role": "user", "content": "京都アニメーションの映画でお勧めを３つ教えてください"}]                 
-    chunk_gen = hf.stream(params, messages=messages)
-    for x in chunk_gen:
-        print(x)
+    # messages = [{"role": "user", "content": "京都アニメーションの映画でお勧めを３つ教えてください"}]                 
+    # chunk_gen = hf(params, messages=messages)
+    # print(chunk_gen)
+    # for x in chunk_gen:
+    #    print(x)
