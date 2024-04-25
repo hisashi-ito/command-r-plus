@@ -1,4 +1,3 @@
-# FROM mosaicml/pytorch:2.0.1_cu118-python3.10-ubuntu20.04
 FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-devel
 
 ENV LANG C.UTF-8
